@@ -6,7 +6,7 @@
 > itself — a change is not "done" until this file reflects it. When in doubt,
 > update it.
 
-_Last updated: 2026-06-14_
+_Last updated: 2026-06-14 (added technical-indicator views)_
 
 ## 1. Purpose
 StocksAI is an ETL pipeline that maintains the **entire NYSE + NASDAQ universe of
@@ -54,6 +54,7 @@ stocksai/
   universe.py  # download/parse NASDAQ Trader files -> upsert securities
   prices.py    # batched yf.download with backoff retry; wide -> long reshape
   loaders.py   # backfill/refresh for daily & hourly (resumable, idempotent)
+  indicators.py# builds the v_indicators_daily SQL view (window functions)
 main.py        # argparse CLI dispatch
 ```
 
@@ -63,6 +64,7 @@ main.py        # argparse CLI dispatch
 - `python main.py refresh-daily [--limit N]`
 - `python main.py backfill-hourly [--limit N] [--no-resume]`
 - `python main.py refresh-hourly [--limit N]`
+- `python main.py create-indicators` — (re)create the `v_indicators_daily` view
 - `python main.py status` — row counts + load_log summary
 
 ## 7. Loader contract (both intervals)
@@ -81,6 +83,9 @@ main.py        # argparse CLI dispatch
 - `HOURLY_PERIOD = "1y"`, `HOURLY_INTERVAL = "1h"`
 - `BATCH_SIZE = 100`, `MAX_RETRIES = 4`, `RETRY_BACKOFF = 2.0`,
   `SLEEP_BETWEEN_BATCHES = 1.0`
+- Indicator params: `SMA_WINDOWS`, `EMA_SPANS`, `MACD_SIGNAL`, `RSI_PERIOD`,
+  `BOLLINGER_WINDOW/K`, `STOCH_K/D`, `ATR_PERIOD`, `ROC_WINDOWS`, `HILO_WINDOW`,
+  `EMA_LOOKBACK_MULT`.
 
 ## 9. Data downloaded (as of 2026-06-14)
 | Table | Rows | Symbols | Coverage |
@@ -121,6 +126,30 @@ main.py        # argparse CLI dispatch
 - **Incremental refresh** uses a fixed recent lookback; it does not hunt for
   interior history gaps.
 
+## 12a. Technical indicators (live SQL views)
+**Two live, non-materialized views** over `ohlcv_daily` (built by
+`stocksai/indicators.py`, created via `init_schema` / `create-indicators`). They
+store nothing; DuckDB recomputes on demand. All computed on **adjusted prices**
+(`adj_close`; intraday high/low adjusted on the fly via each day's
+`adj_close/close` factor).
+
+- **`v_indicators_daily`** (cheap, window functions): `sma_20/50/200`, `rsi_14`,
+  `roc_20/60/120`, `ret_1d`, Bollinger (`bb_mid/upper/lower/pctb/bandwidth`),
+  `atr_14`, `stoch_k/d`, `vol_sma_20`, `obv`, `hi_252/lo_252`,
+  `golden_cross`/`death_cross`/`above_sma_200`.
+- **`v_ema_daily`** (separate by design): `ema_12/26`, `macd`, `macd_signal`,
+  `macd_hist`. EMA uses a geometric-weighted `array_agg` window that is ~14x more
+  expensive than a plain window agg, so it lives apart so it can't slow the main
+  view. **Filter by symbol** → sub-100ms (predicate pushdown limits the heavy work
+  to one symbol). A full-universe EMA scan is the slow path (~90s).
+
+**Performance (measured, 18M daily rows):** filtered-by-symbol queries on either
+view are sub-100ms (the normal backtest pattern). Full-universe screens on
+`v_indicators_daily` are ~11s (live, zero storage). Window-friendly variants keep
+it fast: Cutler's RSI (SMA of gains/losses), SMA-smoothed ATR, and EMA/MACD via
+bounded-window exponential weighting (verified to match pandas `ewm` to many
+decimals). Scope is daily only; an hourly view is a trivial follow-on.
+
 ## 13. Operating notes
 - DuckDB is embedded — nothing to "start/stop." A connection opens the file;
   closing it releases it.
@@ -129,9 +158,9 @@ main.py        # argparse CLI dispatch
 - Browser UI: `duckdb -ui data/stocks.duckdb` → http://localhost:4213/.
 
 ## 14. Planned / under discussion (not yet built)
-- **Technical indicators** (SMA 50/200, etc.) via **SQL views** over
-  `ohlcv_daily` (computed on `adj_close`, trading-day windows). Views add zero
-  storage and recompute in seconds; a materialized table is an opt-in later for
-  hot backtest paths. Scope (indicator set, daily-only vs daily+hourly) TBD.
+- **Hourly indicator view** (`v_indicators_hourly`) — same pattern over
+  `ohlcv_hourly`; add on request.
+- **Wilder-exact** EMA/RSI/ATR and/or a materialized indicator table — only if a
+  hot backtest path needs it.
 - **Corporate-actions tracking** (splits & dividends via `actions=True`) —
   deferred ("revisit later").

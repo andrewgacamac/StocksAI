@@ -6,12 +6,13 @@ Examples:
     python main.py refresh-daily
     python main.py backfill-hourly --limit 50
     python main.py refresh-hourly
+    python main.py create-indicators
     python main.py status
 """
 
 import argparse
 
-from stocksai import loaders
+from stocksai import indicators, loaders
 from stocksai.db import connect, init_schema
 from stocksai.universe import update_universe
 
@@ -19,6 +20,16 @@ from stocksai.universe import update_universe
 def _cmd_update_universe(_args):
     count = update_universe()
     print(f"Universe updated: {count:,} active securities")
+
+
+def _cmd_create_indicators(_args):
+    con = connect()
+    try:
+        indicators.create_views(con)
+        print(f"Created/updated views: {indicators.DAILY_VIEW}, "
+              f"{indicators.EMA_VIEW}")
+    finally:
+        con.close()
 
 
 def _cmd_backfill_daily(args):
@@ -46,9 +57,16 @@ def _cmd_status(_args):
         ).fetchone()[0]
         daily = con.execute("SELECT count(*) FROM ohlcv_daily").fetchone()[0]
         hourly = con.execute("SELECT count(*) FROM ohlcv_hourly").fetchone()[0]
+        # Lightweight existence check (count(*) on the view would scan 18M rows).
+        views = {r[0] for r in con.execute(
+            "SELECT view_name FROM duckdb_views() WHERE NOT internal"
+        ).fetchall()}
+        have = ", ".join(v for v in (indicators.DAILY_VIEW, indicators.EMA_VIEW)
+                         if v in views) or "none"
         print(f"Active securities : {active:,}")
         print(f"Daily rows        : {daily:,}")
         print(f"Hourly rows       : {hourly:,}")
+        print(f"Indicator views   : {have}")
         print("\nLoad log by interval/status:")
         for interval, status, n in con.execute(
             "SELECT interval, status, count(*) FROM load_log "
@@ -88,6 +106,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("refresh-hourly")
     add_limit(p)
     p.set_defaults(func=_cmd_refresh_hourly)
+
+    sub.add_parser("create-indicators").set_defaults(func=_cmd_create_indicators)
 
     sub.add_parser("status").set_defaults(func=_cmd_status)
     return parser

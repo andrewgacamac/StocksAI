@@ -61,5 +61,8 @@ def connect(read_only: bool = False) -> duckdb.DuckDBPyConnection:
 
 
 def init_schema(con: duckdb.DuckDBPyConnection) -> None:
-    """Create all tables if they do not already exist."""
+    """Create all tables (if absent) and (re)create indicator views."""
     con.execute(SCHEMA_DDL)
+    # Local import avoids any import-time coupling; views are cheap to replace.
+    from . import indicators
+    indicators.create_views(con)

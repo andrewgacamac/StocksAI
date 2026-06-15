@@ -52,6 +52,10 @@ drives the price loaders — see `arch.md` for the full schema and rationale.
   same `_run()` serves `backfill` (full window) and `refresh` (short lookback).
 - **`prices.py`** does the yfinance download (`auto_adjust=False`) and reshapes
   the wide (ticker, field) frame into long form for insertion.
+- **`indicators.py`** builds two live (non-materialized) views over `ohlcv_daily`,
+  computed on `adj_close`: `v_indicators_daily` (cheap window-function indicators)
+  and `v_ema_daily` (EMA/MACD). They're (re)created by `init_schema()` and the
+  `create-indicators` command.
 
 ## Critical conventions & gotchas
 - **Single writer at a time.** DuckDB allows only one read-write connection. A
@@ -60,6 +64,10 @@ drives the price loaders — see `arch.md` for the full schema and rationale.
 - **Indicators/returns must use `adj_close`, not raw `close`.** Raw OHLC is
   stored unadjusted (so splits show as price jumps); `adj_close` is split/
   dividend-adjusted. Computing on raw `close` produces false crossover signals.
+- **EMA is the expensive indicator.** It needs an `array_agg` window (~14x a
+  normal window agg) and DuckDB can't prune it through CTEs, so it lives in its
+  own `v_ema_daily` view. Query it filtered by symbol (sub-100ms via predicate
+  pushdown); never add EMA-style `array_agg` columns to `v_indicators_daily`.
 - **Widening a history window** = edit `DAILY_PERIOD`/`HOURLY_PERIOD` in
   `config.py`, then run the backfill with `--no-resume` (resume would skip all
   already-loaded symbols). Reloads are idempotent — overlapping rows upsert, no

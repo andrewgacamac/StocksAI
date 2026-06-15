@@ -8,10 +8,10 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# DuckDB database files
+# DuckDB database + all derived data (incl. transient *.tmp temp-storage dirs)
+/data/
 *.duckdb
 *.duckdb.wal
-data/*.db
 
 # Environment / secrets
 .env

@@ -38,3 +38,20 @@ BATCH_SIZE = 100          # tickers per yfinance request
 MAX_RETRIES = 4           # attempts per batch before giving up
 RETRY_BACKOFF = 2.0       # seconds; doubles each retry (2, 4, 8, ...)
 SLEEP_BETWEEN_BATCHES = 1.0  # politeness delay to avoid throttling
+
+# --- Indicator parameters (used by the v_indicators_daily view) ------------
+# All windows are in trading bars. See stocksai/indicators.py.
+SMA_WINDOWS = (20, 50, 200)
+EMA_SPANS = (12, 26)
+MACD_SIGNAL = 9
+RSI_PERIOD = 14
+BOLLINGER_WINDOW = 20
+BOLLINGER_K = 2
+STOCH_K = 14
+STOCH_D = 3
+ATR_PERIOD = 14
+ROC_WINDOWS = (20, 60, 120)
+HILO_WINDOW = 252         # ~52 weeks
+# EMA/MACD use a bounded-window exponential weighting; the lookback is
+# EMA_LOOKBACK_MULT * span bars, beyond which weights are negligible.
+EMA_LOOKBACK_MULT = 10

@@ -43,6 +43,7 @@ python main.py backfill-daily           # one-time daily history load
 python main.py backfill-hourly          # one-time hourly history load
 python main.py refresh-daily            # cheap incremental top-up (run nightly)
 python main.py refresh-hourly
+python main.py create-indicators        # (re)create the indicators view
 python main.py status                   # row counts + load_log summary
 ```
 
@@ -57,6 +58,32 @@ python main.py update-universe
 python main.py backfill-daily --limit 50   # smoke-test on a sample first
 python main.py backfill-daily              # then the full ~12.7k universe
 python main.py backfill-hourly
+```
+
+## Technical indicators
+
+Two live SQL views over `ohlcv_daily` (computed on adjusted prices) — they store
+nothing and recompute on demand. Create them with `python main.py
+create-indicators` (also auto-created by any command that initializes the schema).
+
+- **`v_indicators_daily`** — SMA(20/50/200), RSI(14), Bollinger Bands, Stochastic,
+  ATR(14), ROC, OBV, 52-week high/low, golden/death-cross flags. Fast for
+  full-universe screens (~11s) and sub-second when filtered by symbol.
+- **`v_ema_daily`** — EMA(12/26), MACD, signal, histogram. Kept separate because
+  EMA is much heavier; **filter by symbol** and it's sub-100ms. Avoid
+  full-universe scans of this view.
+
+```sql
+-- Oversold large caps today (cheap view)
+SELECT symbol, adj_close, rsi_14, sma_200
+FROM v_indicators_daily
+WHERE date = (SELECT max(date) FROM v_indicators_daily)
+  AND rsi_14 < 30 AND adj_close > sma_200
+ORDER BY rsi_14;
+
+-- MACD for one symbol (filter the EMA view by symbol)
+SELECT date, macd, macd_signal, macd_hist
+FROM v_ema_daily WHERE symbol = 'AAPL' ORDER BY date DESC LIMIT 20;
 ```
 
 ## Inspecting the data (DuckDB UI)

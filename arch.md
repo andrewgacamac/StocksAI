@@ -6,7 +6,7 @@
 > itself — a change is not "done" until this file reflects it. When in doubt,
 > update it.
 
-_Last updated: 2026-06-14 (added technical-indicator views)_
+_Last updated: 2026-06-14 (indicator views + definitions + charts.py/plot command)_
 
 ## 1. Purpose
 StocksAI is an ETL pipeline that maintains the **entire NYSE + NASDAQ universe of
@@ -18,7 +18,7 @@ backtesting.
 - **Python 3.9.6** in a local virtualenv (`.venv/`)
 - **duckdb** (Python lib 1.4.4) — embedded analytical database
 - **yfinance** — Yahoo Finance price downloads
-- **pandas**, **requests**
+- **pandas**, **requests**, **matplotlib** (charts)
 - **DuckDB CLI 1.5.3** (Homebrew, `/opt/homebrew/bin/duckdb`) — used for the
   browser UI (`duckdb -ui`)
 
@@ -55,6 +55,7 @@ stocksai/
   prices.py    # batched yf.download with backoff retry; wide -> long reshape
   loaders.py   # backfill/refresh for daily & hourly (resumable, idempotent)
   indicators.py# builds the v_indicators_daily SQL view (window functions)
+  charts.py    # reusable matplotlib indicator charts for any symbol
 main.py        # argparse CLI dispatch
 ```
 
@@ -64,7 +65,9 @@ main.py        # argparse CLI dispatch
 - `python main.py refresh-daily [--limit N]`
 - `python main.py backfill-hourly [--limit N] [--no-resume]`
 - `python main.py refresh-hourly [--limit N]`
-- `python main.py create-indicators` — (re)create the `v_indicators_daily` view
+- `python main.py create-indicators` — (re)create the indicator views
+- `python main.py plot SYMBOL [--years N|--start --end] [--outdir DIR]` —
+  render indicator charts (PNG) for a symbol
 - `python main.py status` — row counts + load_log summary
 
 ## 7. Loader contract (both intervals)
@@ -149,6 +152,36 @@ view are sub-100ms (the normal backtest pattern). Full-universe screens on
 it fast: Cutler's RSI (SMA of gains/losses), SMA-smoothed ATR, and EMA/MACD via
 bounded-window exponential weighting (verified to match pandas `ewm` to many
 decimals). Scope is daily only; an hourly view is a trivial follow-on.
+
+### Indicator definitions
+All on adjusted price `p = adj_close`; "N bars" = N trading days; `prev` = prior
+bar. Moving values are NULL during their warm-up window.
+
+| Column | Meaning | Definition |
+|---|---|---|
+| `sma_20/50/200` | Simple moving average | `AVG(p)` over last 20/50/200 bars |
+| `ema_12/26` | Exponential moving average | span `s`, α=2/(s+1); geometric-weighted avg of last `EMA_LOOKBACK_MULT*s` bars (≈ true EMA) |
+| `macd` | MACD line | `ema_12 − ema_26` |
+| `macd_signal` | MACD signal line | 9-bar EMA of `macd` |
+| `macd_hist` | MACD histogram | `macd − macd_signal` |
+| `rsi_14` | Relative Strength Index (Cutler) | `100 − 100/(1+RS)`, `RS = AVG(gain,14)/AVG(loss,14)`; 0–100 |
+| `roc_20/60/120` | Rate of change (%) | `(p / p[N bars ago] − 1) × 100` |
+| `ret_1d` | 1-day return | `p / prev − 1` |
+| `bb_mid` | Bollinger middle band | `sma_20` |
+| `bb_upper` / `bb_lower` | Bollinger bands | `sma_20 ± BOLLINGER_K × stddev_samp(p,20)` |
+| `bb_pctb` | %B (position in bands) | `(p − bb_lower)/(bb_upper − bb_lower)`; 0=lower,1=upper |
+| `bb_bandwidth` | Band width (volatility) | `(bb_upper − bb_lower)/bb_mid` |
+| `atr_14` | Average True Range (SMA variant) | `AVG(TR,14)`, `TR = max(high−low, |high−prev|, |low−prev|)` on adjusted H/L |
+| `stoch_k` | Stochastic %K | `100×(p − min(low,14))/(max(high,14) − min(low,14))`, clamped 0–100 |
+| `stoch_d` | Stochastic %D | `SMA(stoch_k, 3)` |
+| `vol_sma_20` | Average volume | `AVG(volume)` over last 20 bars (raw volume) |
+| `obv` | On-Balance Volume | running cumsum: `+volume` if `p>prev`, `−volume` if `p<prev`, else 0 |
+| `hi_252` / `lo_252` | 52-week high / low | `max(p)` / `min(p)` over last 252 bars |
+| `golden_cross` | SMA-50 crosses above SMA-200 | `sma_50>sma_200 AND prev_sma_50≤prev_sma_200` |
+| `death_cross` | SMA-50 crosses below SMA-200 | `sma_50<sma_200 AND prev_sma_50≥prev_sma_200` |
+| `above_sma_200` | Price above long-term trend | `p > sma_200` |
+
+(Window lengths above are the current `config.py` defaults.)
 
 ## 13. Operating notes
 - DuckDB is embedded — nothing to "start/stop." A connection opens the file;

@@ -31,6 +31,9 @@ python main.py status                       # row counts + load_log summary
 
 # Inspect data (browser UI at http://localhost:4213/)
 duckdb -ui data/stocks.duckdb
+
+# Charts (PNGs for a symbol via stocksai/charts.py)
+python main.py plot TSLA --years 3      # -> plots/<SYMBOL>_{price,oscillators}.png
 ```
 
 There is no test suite or linter configured. Verify changes by running a loader

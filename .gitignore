@@ -13,6 +13,9 @@ __pycache__/
 *.duckdb
 *.duckdb.wal
 
+# Generated chart output
+plots/
+
 # Environment / secrets
 .env
 

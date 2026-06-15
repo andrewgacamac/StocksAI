@@ -86,6 +86,15 @@ SELECT date, macd, macd_signal, macd_hist
 FROM v_ema_daily WHERE symbol = 'AAPL' ORDER BY date DESC LIMIT 20;
 ```
 
+### Charting
+
+Render indicator charts (two PNGs — price/trend and oscillators) for any symbol:
+
+```bash
+python main.py plot TSLA --years 3     # -> plots/TSLA_price.png, plots/TSLA_oscillators.png
+python main.py plot AAPL --start 2020-01-01 --end 2022-12-31
+```
+
 ## Inspecting the data (DuckDB UI)
 
 ```bash

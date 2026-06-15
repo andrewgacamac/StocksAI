@@ -7,6 +7,7 @@ Examples:
     python main.py backfill-hourly --limit 50
     python main.py refresh-hourly
     python main.py create-indicators
+    python main.py plot TSLA --years 3
     python main.py status
 """
 
@@ -30,6 +31,15 @@ def _cmd_create_indicators(_args):
               f"{indicators.EMA_VIEW}")
     finally:
         con.close()
+
+
+def _cmd_plot(args):
+    from stocksai import charts
+    paths = charts.plot_symbol(args.symbol, years=args.years,
+                               start=args.start, end=args.end,
+                               outdir=args.outdir)
+    for p in paths:
+        print(f"wrote {p}")
 
 
 def _cmd_backfill_daily(args):
@@ -108,6 +118,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_cmd_refresh_hourly)
 
     sub.add_parser("create-indicators").set_defaults(func=_cmd_create_indicators)
+
+    p = sub.add_parser("plot", help="render indicator charts for a symbol")
+    p.add_argument("symbol", help="ticker, e.g. TSLA")
+    p.add_argument("--years", type=int, default=3,
+                   help="lookback in years (default 3; ignored if --start given)")
+    p.add_argument("--start", default=None, help="start date YYYY-MM-DD")
+    p.add_argument("--end", default=None, help="end date YYYY-MM-DD (default today)")
+    p.add_argument("--outdir", default="plots", help="output directory")
+    p.set_defaults(func=_cmd_plot)
 
     sub.add_parser("status").set_defaults(func=_cmd_status)
     return parser

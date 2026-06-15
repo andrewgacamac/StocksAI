@@ -42,7 +42,9 @@ SLEEP_BETWEEN_BATCHES = 1.0  # politeness delay to avoid throttling
 # --- Indicator parameters (used by the v_indicators_daily view) ------------
 # All windows are in trading bars. See stocksai/indicators.py.
 SMA_WINDOWS = (20, 50, 200)
-EMA_SPANS = (12, 26)
+EMA_SPANS = (12, 26, 50, 200)   # EMAs exposed as columns in v_ema_daily
+MACD_FAST = 12                   # MACD line = EMA(fast) - EMA(slow)
+MACD_SLOW = 26
 MACD_SIGNAL = 9
 RSI_PERIOD = 14
 BOLLINGER_WINDOW = 20

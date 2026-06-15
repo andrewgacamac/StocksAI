@@ -146,36 +146,49 @@ FROM calc3
 
 
 def build_ema_view_sql() -> str:
-    """EMA(12/26) + MACD. Heavy (array_agg) — filter by symbol for speed."""
-    span_fast, span_slow = config.EMA_SPANS
-    look_fast = config.EMA_LOOKBACK_MULT * span_fast
-    look_slow = config.EMA_LOOKBACK_MULT * span_slow
-    look_sig = config.EMA_LOOKBACK_MULT * config.MACD_SIGNAL
+    """EMA(s) + MACD. Heavy (array_agg) — filter by symbol for speed.
+
+    One EMA column per span in config.EMA_SPANS; longer spans need a larger
+    array_agg window (lookback = EMA_LOOKBACK_MULT*span) and are correspondingly
+    more expensive — another reason to always filter this view by symbol.
+    """
+    spans = list(config.EMA_SPANS)
+    mult = config.EMA_LOOKBACK_MULT
+
+    arr_cols = ",\n        ".join(
+        f"array_agg(adj_close) OVER ({_W} {_frame(mult * s)}) AS arr_{s}"
+        for s in spans
+    )
+    ema_cols = ",\n        ".join(
+        f"{_ema_from_array(f'arr_{s}', s)} AS ema_{s}" for s in spans
+    )
+    ema_out = ", ".join(f"ema_{s}" for s in spans)
+    look_sig = mult * config.MACD_SIGNAL
+    signal = _ema_from_array("arr_macd", config.MACD_SIGNAL)
+
     return f"""
 CREATE OR REPLACE VIEW {EMA_VIEW} AS
 WITH base AS (
     SELECT symbol, date, adj_close AS p,
-        array_agg(adj_close) OVER ({_W} {_frame(look_fast)}) AS arr_fast,
-        array_agg(adj_close) OVER ({_W} {_frame(look_slow)}) AS arr_slow
+        {arr_cols}
     FROM ohlcv_daily
 ),
 e AS (
     SELECT symbol, date, p,
-        {_ema_from_array('arr_fast', span_fast)} AS ema_{span_fast},
-        {_ema_from_array('arr_slow', span_slow)} AS ema_{span_slow}
+        {ema_cols}
     FROM base
 ),
 m AS (
-    SELECT *, (ema_{span_fast} - ema_{span_slow}) AS macd FROM e
+    SELECT *, (ema_{config.MACD_FAST} - ema_{config.MACD_SLOW}) AS macd FROM e
 ),
 s AS (
     SELECT *, array_agg(macd) OVER ({_W} {_frame(look_sig)}) AS arr_macd FROM m
 )
 SELECT
     symbol, date, p AS adj_close,
-    ema_{span_fast}, ema_{span_slow}, macd,
-    {_ema_from_array('arr_macd', config.MACD_SIGNAL)} AS macd_signal,
-    macd - ({_ema_from_array('arr_macd', config.MACD_SIGNAL)}) AS macd_hist
+    {ema_out}, macd,
+    {signal} AS macd_signal,
+    macd - ({signal}) AS macd_hist
 FROM s
 """
 

@@ -69,7 +69,7 @@ create-indicators` (also auto-created by any command that initializes the schema
 - **`v_indicators_daily`** — SMA(20/50/200), RSI(14), Bollinger Bands, Stochastic,
   ATR(14), ROC, OBV, 52-week high/low, golden/death-cross flags. Fast for
   full-universe screens (~11s) and sub-second when filtered by symbol.
-- **`v_ema_daily`** — EMA(12/26), MACD, signal, histogram. Kept separate because
+- **`v_ema_daily`** — EMA(12/26/50/200), MACD, signal, histogram. Kept separate because
   EMA is much heavier; **filter by symbol** and it's sub-100ms. Avoid
   full-universe scans of this view.
 

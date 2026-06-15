@@ -6,7 +6,7 @@
 > itself — a change is not "done" until this file reflects it. When in doubt,
 > update it.
 
-_Last updated: 2026-06-14 (indicator views + definitions + charts.py/plot command)_
+_Last updated: 2026-06-14 (added ema_50/ema_200 to v_ema_daily)_
 
 ## 1. Purpose
 StocksAI is an ETL pipeline that maintains the **entire NYSE + NASDAQ universe of
@@ -140,11 +140,12 @@ store nothing; DuckDB recomputes on demand. All computed on **adjusted prices**
   `roc_20/60/120`, `ret_1d`, Bollinger (`bb_mid/upper/lower/pctb/bandwidth`),
   `atr_14`, `stoch_k/d`, `vol_sma_20`, `obv`, `hi_252/lo_252`,
   `golden_cross`/`death_cross`/`above_sma_200`.
-- **`v_ema_daily`** (separate by design): `ema_12/26`, `macd`, `macd_signal`,
-  `macd_hist`. EMA uses a geometric-weighted `array_agg` window that is ~14x more
-  expensive than a plain window agg, so it lives apart so it can't slow the main
-  view. **Filter by symbol** → sub-100ms (predicate pushdown limits the heavy work
-  to one symbol). A full-universe EMA scan is the slow path (~90s).
+- **`v_ema_daily`** (separate by design): `ema_12/26/50/200`, `macd`,
+  `macd_signal`, `macd_hist`. EMA uses a geometric-weighted `array_agg` window
+  that is ~14x more expensive than a plain window agg, so it lives apart so it
+  can't slow the main view. **Filter by symbol** → sub-second (predicate pushdown
+  limits the heavy work to one symbol; longer spans like ema_200 use larger
+  windows and cost a bit more). A full-universe EMA scan is the slow path.
 
 **Performance (measured, 18M daily rows):** filtered-by-symbol queries on either
 view are sub-100ms (the normal backtest pattern). Full-universe screens on
@@ -160,8 +161,8 @@ bar. Moving values are NULL during their warm-up window.
 | Column | Meaning | Definition |
 |---|---|---|
 | `sma_20/50/200` | Simple moving average | `AVG(p)` over last 20/50/200 bars |
-| `ema_12/26` | Exponential moving average | span `s`, α=2/(s+1); geometric-weighted avg of last `EMA_LOOKBACK_MULT*s` bars (≈ true EMA) |
-| `macd` | MACD line | `ema_12 − ema_26` |
+| `ema_12/26/50/200` | Exponential moving average | span `s`, α=2/(s+1); geometric-weighted avg of last `EMA_LOOKBACK_MULT*s` bars (≈ true EMA, verified vs pandas `ewm`) |
+| `macd` | MACD line | `ema_12 − ema_26` (`MACD_FAST`/`MACD_SLOW`) |
 | `macd_signal` | MACD signal line | 9-bar EMA of `macd` |
 | `macd_hist` | MACD histogram | `macd − macd_signal` |
 | `rsi_14` | Relative Strength Index (Cutler) | `100 − 100/(1+RS)`, `RS = AVG(gain,14)/AVG(loss,14)`; 0–100 |

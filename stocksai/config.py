@@ -14,8 +14,8 @@ DB_PATH = DATA_DIR / "stocks.duckdb"
 
 # --- History windows -------------------------------------------------------
 # Passed straight to yfinance's `period` argument.
-DAILY_PERIOD = "7y"     # 7 years of daily bars
-HOURLY_PERIOD = "1mo"   # 1 month of hourly bars (Yahoo caps 1h history at 730d)
+DAILY_PERIOD = "10y"    # 10 years of daily bars
+HOURLY_PERIOD = "1y"    # 1 year of hourly bars (Yahoo caps 1h history at 730d)
 
 DAILY_INTERVAL = "1d"
 HOURLY_INTERVAL = "1h"

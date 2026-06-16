@@ -16,8 +16,14 @@ __pycache__/
 # Generated chart output
 plots/
 
-# Environment / secrets
+# Environment / secrets / keys (never commit these)
 .env
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+PK2026.pem
 
 # OS
 .DS_Store

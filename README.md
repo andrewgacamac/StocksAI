@@ -95,6 +95,18 @@ python main.py plot TSLA --years 3     # -> plots/TSLA_price.png, plots/TSLA_osc
 python main.py plot AAPL --start 2020-01-01 --end 2022-12-31
 ```
 
+## Screens
+
+Reusable market screens over the views. `strong-trend` finds stocks where
+price > SMA-50 > SMA-200 on ≥`pct`% of the last `months` months with a rising
+SMA-200. Restricted to common stocks (`security_type='stock'`) by default.
+
+```bash
+python main.py screen strong-trend                      # defaults: 6mo, 80%, slope 15%
+python main.py screen strong-trend --months 12 --pct 90 --min-slope 25 --csv out.csv
+python main.py screen strong-trend --include-nonstock   # don't restrict to common stocks
+```
+
 ## Inspecting the data (DuckDB UI)
 
 ```bash

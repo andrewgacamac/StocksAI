@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS securities (
     name              VARCHAR,
     exchange          VARCHAR,               -- NASDAQ / NYSE / NYSE American / ...
     is_etf            BOOLEAN,
+    security_type     VARCHAR,               -- stock/etf/preferred/note/warrant/unit/right/fund/spac
     market_category   VARCHAR,
     financial_status  VARCHAR,
     is_active         BOOLEAN,               -- present in today's directory file
@@ -63,6 +64,8 @@ def connect(read_only: bool = False) -> duckdb.DuckDBPyConnection:
 def init_schema(con: duckdb.DuckDBPyConnection) -> None:
     """Create all tables (if absent) and (re)create indicator views."""
     con.execute(SCHEMA_DDL)
+    # Migration for pre-existing DBs created before security_type was added.
+    con.execute("ALTER TABLE securities ADD COLUMN IF NOT EXISTS security_type VARCHAR")
     # Local import avoids any import-time coupling; views are cheap to replace.
     from . import indicators
     indicators.create_views(con)

@@ -6,7 +6,7 @@
 > itself — a change is not "done" until this file reflects it. When in doubt,
 > update it.
 
-_Last updated: 2026-06-14 (added ema_50/ema_200 to v_ema_daily)_
+_Last updated: 2026-06-16 (security_type on securities + reusable screens.py / screen command)_
 
 ## 1. Purpose
 StocksAI is an ETL pipeline that maintains the **entire NYSE + NASDAQ universe of
@@ -32,8 +32,11 @@ backtesting.
 
 ## 4. Database schema (`data/stocks.duckdb`)
 - **`securities`** (dimension): `symbol` PK (Yahoo form), `source_symbol`
-  (NASDAQ form), `name`, `exchange`, `is_etf`, `market_category`,
+  (NASDAQ form), `name`, `exchange`, `is_etf`, `security_type`, `market_category`,
   `financial_status`, `is_active`, `first_seen`, `last_seen`, `updated_at`.
+  `security_type` ∈ {stock, etf, preferred, note, warrant, unit, right, fund,
+  spac} — heuristic classification (symbols.py) so screens can keep to real
+  common stocks (~5.1k of ~12.8k active) instead of pattern-matching names.
 - **`ohlcv_daily`**: `symbol`, `date`, `open`, `high`, `low`, `close` (raw),
   `adj_close`, `volume`. PK `(symbol, date)`.
 - **`ohlcv_hourly`**: `symbol`, `ts` (US/Eastern wall-clock), `open`, `high`,
@@ -56,6 +59,7 @@ stocksai/
   loaders.py   # backfill/refresh for daily & hourly (resumable, idempotent)
   indicators.py# builds the v_indicators_daily SQL view (window functions)
   charts.py    # reusable matplotlib indicator charts for any symbol
+  screens.py   # reusable market screens (e.g. strong_trend) over the views
 main.py        # argparse CLI dispatch
 ```
 
@@ -68,6 +72,8 @@ main.py        # argparse CLI dispatch
 - `python main.py create-indicators` — (re)create the indicator views
 - `python main.py plot SYMBOL [--years N|--start --end] [--outdir DIR]` —
   render indicator charts (PNG) for a symbol
+- `python main.py screen strong-trend [--months --pct --min-slope --min-price
+  --min-vol --include-nonstock --limit --csv]` — run a market screen
 - `python main.py status` — row counts + load_log summary
 
 ## 7. Loader contract (both intervals)

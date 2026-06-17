@@ -34,6 +34,9 @@ duckdb -ui data/stocks.duckdb
 
 # Charts (PNGs for a symbol via stocksai/charts.py)
 python main.py plot TSLA --years 3      # -> plots/<SYMBOL>_{price,oscillators}.png
+
+# Screens (reusable, via stocksai/screens.py)
+python main.py screen strong-trend      # stocks in a strong uptrend (security_type='stock')
 ```
 
 There is no test suite or linter configured. Verify changes by running a loader
@@ -59,6 +62,10 @@ drives the price loaders — see `arch.md` for the full schema and rationale.
   computed on `adj_close`: `v_indicators_daily` (cheap window-function indicators)
   and `v_ema_daily` (EMA/MACD). They're (re)created by `init_schema()` and the
   `create-indicators` command.
+- **`screens.py`** holds reusable screens (e.g. `strong_trend`) over the views.
+  Filter to real common stocks with `securities.security_type = 'stock'` (set by
+  the universe loader) — don't pattern-match names. `NOT is_etf` alone is NOT
+  enough; the universe is ~58% non-common-stock (ETFs/preferreds/notes/SPACs/etc.).
 
 ## Critical conventions & gotchas
 - **Single writer at a time.** DuckDB allows only one read-write connection. A

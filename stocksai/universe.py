@@ -17,7 +17,7 @@ import requests
 
 from . import config
 from .db import connect, init_schema
-from .symbols import to_yahoo
+from .symbols import security_type, to_yahoo
 
 
 def _download(url: str) -> pd.DataFrame:
@@ -71,6 +71,11 @@ def fetch_universe() -> pd.DataFrame:
     combined = combined[combined["symbol"] != ""]
     # A handful of symbols appear on multiple feeds; keep the first occurrence.
     combined = combined.drop_duplicates(subset=["symbol"], keep="first")
+    combined["security_type"] = [
+        security_type(sym, nm, etf)
+        for sym, nm, etf in zip(combined["symbol"], combined["name"],
+                                combined["is_etf"])
+    ]
     return combined.reset_index(drop=True)
 
 
@@ -90,12 +95,12 @@ def update_universe() -> int:
         con.execute(
             """
             INSERT INTO securities AS s (
-                symbol, source_symbol, name, exchange, is_etf,
+                symbol, source_symbol, name, exchange, is_etf, security_type,
                 market_category, financial_status, is_active,
                 first_seen, last_seen, updated_at
             )
             SELECT
-                symbol, source_symbol, name, exchange, is_etf,
+                symbol, source_symbol, name, exchange, is_etf, security_type,
                 market_category, financial_status, TRUE,
                 $today, $today, $now
             FROM incoming
@@ -104,6 +109,7 @@ def update_universe() -> int:
                 name             = excluded.name,
                 exchange         = excluded.exchange,
                 is_etf           = excluded.is_etf,
+                security_type    = excluded.security_type,
                 market_category  = excluded.market_category,
                 financial_status = excluded.financial_status,
                 is_active        = TRUE,

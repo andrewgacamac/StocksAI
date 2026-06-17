@@ -8,6 +8,7 @@ Examples:
     python main.py refresh-hourly
     python main.py create-indicators
     python main.py plot TSLA --years 3
+    python main.py screen strong-trend --months 6 --pct 80 --min-slope 15
     python main.py status
 """
 
@@ -40,6 +41,24 @@ def _cmd_plot(args):
                                outdir=args.outdir)
     for p in paths:
         print(f"wrote {p}")
+
+
+def _cmd_screen(args):
+    from stocksai import screens
+    df = screens.strong_trend(
+        months=args.months, pct=args.pct, min_slope=args.min_slope,
+        min_price=args.min_price, min_vol=args.min_vol,
+        stocks_only=not args.include_nonstock, limit=args.limit,
+    )
+    print(f"{len(df)} matches\n")
+    if not df.empty:
+        with __import__("pandas").option_context("display.max_rows", 60,
+                                                  "display.width", 120):
+            print(df.to_string(index=False))
+        print("\nSYMBOLS:\n" + ", ".join(df["symbol"]))
+    if args.csv:
+        df.to_csv(args.csv, index=False)
+        print(f"\nwrote {args.csv}")
 
 
 def _cmd_backfill_daily(args):
@@ -118,6 +137,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=_cmd_refresh_hourly)
 
     sub.add_parser("create-indicators").set_defaults(func=_cmd_create_indicators)
+
+    p = sub.add_parser("screen", help="run a market screen")
+    p.add_argument("which", choices=["strong-trend"], help="which screen")
+    p.add_argument("--months", type=int, default=6, help="lookback window (months)")
+    p.add_argument("--pct", type=float, default=80, help="min %% of days in trend")
+    p.add_argument("--min-slope", type=float, default=15,
+                   help="min %% rise of SMA-200 over window")
+    p.add_argument("--min-price", type=float, default=5)
+    p.add_argument("--min-vol", type=float, default=100000)
+    p.add_argument("--include-nonstock", action="store_true",
+                   help="don't restrict to security_type='stock'")
+    p.add_argument("--limit", type=int, default=None)
+    p.add_argument("--csv", default=None, help="also write results to this CSV path")
+    p.set_defaults(func=_cmd_screen)
 
     p = sub.add_parser("plot", help="render indicator charts for a symbol")
     p.add_argument("symbol", help="ticker, e.g. TSLA")
